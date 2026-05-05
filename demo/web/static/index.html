@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exercise Counter</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 2rem; }
+        h1 { margin-bottom: 1rem; color: #e94560; }
+        #exercises { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; }
+        .exercise-card {
+            background: #16213e; border: 2px solid #0f3460;
+            border-radius: 8px; padding: 1.5rem; min-width: 200px; text-align: center;
+        }
+        .exercise-card .count { font-size: 3rem; font-weight: bold; color: #e94560; }
+        .exercise-card .label { font-size: 0.9rem; color: #aaa; margin-top: 0.5rem; }
+        #log { background: #0f0f23; padding: 1rem; border-radius: 8px;
+               max-height: 400px; overflow-y: auto; font-size: 0.85rem; }
+        #log p { padding: 2px 0; border-bottom: 1px solid #1a1a2e; }
+        #status { margin-bottom: 1rem; color: #aaa; }
+        .connected { color: #4ecca3 !important; }
+        .disconnected { color: #e94560 !important; }
+    </style>
+</head>
+<body>
+    <h1>Exercise Counter</h1>
+    <p id="status" class="disconnected">Disconnected</p>
+    <div id="exercises"></div>
+    <h2 style="margin-bottom: 0.5rem;">Event Log</h2>
+    <div id="log"></div>
+
+    <script>
+        const exercises = {};
+        const exercisesDiv = document.getElementById('exercises');
+        const logDiv = document.getElementById('log');
+        const statusEl = document.getElementById('status');
+
+        function updateCard(patternId, count) {
+            exercises[patternId] = count;
+            exercisesDiv.innerHTML = '';
+            for (const [pid, cnt] of Object.entries(exercises)) {
+                const card = document.createElement('div');
+                card.className = 'exercise-card';
+                card.innerHTML = `
+                    <div class="count">${cnt}</div>
+                    <div class="label">Exercise #${pid}</div>
+                `;
+                exercisesDiv.appendChild(card);
+            }
+        }
+
+        function addLog(msg) {
+            const p = document.createElement('p');
+            p.textContent = msg;
+            logDiv.prepend(p);
+            if (logDiv.children.length > 200) logDiv.lastChild.remove();
+        }
+
+        function connect() {
+            const ws = new WebSocket(`ws://${location.host}/ws/events`);
+            ws.onopen = () => {
+                statusEl.textContent = 'Connected';
+                statusEl.className = 'connected';
+            };
+            ws.onclose = () => {
+                statusEl.textContent = 'Disconnected — reconnecting...';
+                statusEl.className = 'disconnected';
+                setTimeout(connect, 2000);
+            };
+            ws.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                updateCard(data.pattern_id, data.count);
+                addLog(`[${data.timestamp}s] exercise #${data.pattern_id} — count: ${data.count}`);
+            };
+        }
+
+        connect();
+    </script>
+</body>
+</html>
