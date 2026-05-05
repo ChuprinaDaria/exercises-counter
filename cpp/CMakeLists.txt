@@ -31,6 +31,7 @@ if(EXCO_BUILD_TESTS)
     add_executable(exco_tests
         tests/test_main.cpp
         tests/test_geometry.cpp
+        tests/test_signal.cpp
     )
     target_link_libraries(exco_tests PRIVATE exco_core)
     target_include_directories(exco_tests PRIVATE tests)
