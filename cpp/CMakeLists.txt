@@ -30,6 +30,7 @@ option(EXCO_BUILD_TESTS "Build tests" ON)
 if(EXCO_BUILD_TESTS)
     add_executable(exco_tests
         tests/test_main.cpp
+        tests/test_geometry.cpp
     )
     target_link_libraries(exco_tests PRIVATE exco_core)
     target_include_directories(exco_tests PRIVATE tests)
