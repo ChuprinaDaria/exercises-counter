@@ -25,7 +25,7 @@ TEST_CASE("smooth — moving average removes noise") {
 TEST_CASE("autocorrelate — detects periodicity") {
     std::vector<float> signal;
     for (int i = 0; i < 100; ++i) {
-        signal.push_back(std::sin(2.0f * static_cast<float>(M_PI) * static_cast<float>(i) / 10.0f));
+        signal.push_back(std::sin(2.0f * 3.14159265f * static_cast<float>(i) / 10.0f));
     }
     auto acorr = exco::autocorrelate(signal);
     CHECK(acorr.size() == signal.size());
@@ -37,7 +37,7 @@ TEST_CASE("autocorrelate — detects periodicity") {
 TEST_CASE("find_period — returns correct period for sine") {
     std::vector<float> signal;
     for (int i = 0; i < 100; ++i) {
-        signal.push_back(std::sin(2.0f * static_cast<float>(M_PI) * static_cast<float>(i) / 20.0f));
+        signal.push_back(std::sin(2.0f * 3.14159265f * static_cast<float>(i) / 20.0f));
     }
     auto result = exco::find_period(signal, 5, 50);
     REQUIRE(result.has_value());

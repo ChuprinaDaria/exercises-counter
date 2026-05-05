@@ -29,7 +29,8 @@ PYBIND11_MODULE(_exco_cpp, m) {
     m.def("smooth", &exco::smooth, py::arg("signal"), py::arg("window"));
     m.def("autocorrelate", &exco::autocorrelate, py::arg("signal"));
     m.def("find_period", &exco::find_period,
-          py::arg("signal"), py::arg("min_period"), py::arg("max_period"));
+          py::arg("signal"), py::arg("min_period"), py::arg("max_period"),
+          py::arg("min_strength") = 0.3f);
 
     // pattern
     py::class_<exco::Pattern>(m, "Pattern")

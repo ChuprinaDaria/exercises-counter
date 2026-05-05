@@ -7,7 +7,7 @@ TEST_CASE("RepCounter — counts peaks in sine wave") {
     for (int cycle = 0; cycle < 3; ++cycle) {
         for (int i = 0; i < 20; ++i) {
             float t = static_cast<float>(i) / 19.0f;
-            float val = 0.5f + 0.5f * std::sin(2.0f * static_cast<float>(M_PI) * t);
+            float val = 0.5f + 0.5f * std::sin(2.0f * 3.14159265f * t);
             counter.push(val);
         }
     }

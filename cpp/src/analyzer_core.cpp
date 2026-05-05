@@ -58,7 +58,8 @@ std::vector<int> AnalyzerCore::find_dominant_joints(int top_n) const {
 
 std::vector<float> AnalyzerCore::build_composite(const std::vector<int>& joints) const {
     if (joints.empty()) return {};
-    size_t len = joint_signals_[static_cast<size_t>(joints[0])].size();
+    const auto& first = joint_signals_[static_cast<size_t>(joints[0])];
+    size_t len = first.size();
     std::vector<float> composite(len, 0.0f);
     for (int j : joints) {
         const auto& sig = joint_signals_[static_cast<size_t>(j)];
@@ -82,7 +83,7 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
         auto& sig = joint_signals_[static_cast<size_t>(j)];
         sig.push_back(landmarks[static_cast<size_t>(j)].y);
         if (static_cast<int>(sig.size()) > config_.window_frames) {
-            sig.erase(sig.begin());
+            sig.pop_front();
         }
     }
     ++frame_count_;
@@ -97,7 +98,8 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
     auto composite = build_composite(dominant);
     composite = smooth(composite, config_.smooth_window);
 
-    auto period_result = find_period(composite, config_.min_period, config_.max_period);
+    auto period_result = find_period(composite, config_.min_period, config_.max_period,
+                                      config_.period_strength);
     if (!period_result.has_value()) return std::nullopt;
 
     int period = period_result->period;

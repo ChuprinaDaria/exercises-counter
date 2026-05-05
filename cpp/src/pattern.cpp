@@ -2,6 +2,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
+#include <stdexcept>
 
 namespace exco {
 
@@ -69,6 +70,9 @@ Pattern deserialize_pattern(const std::vector<uint8_t>& data) {
     Pattern p{};
     size_t offset = 0;
     auto pull = [&](void* dst, size_t sz) {
+        if (offset + sz > data.size()) {
+            throw std::runtime_error("corrupt pattern data: unexpected end of buffer");
+        }
         std::memcpy(dst, data.data() + offset, sz);
         offset += sz;
     };
@@ -77,10 +81,16 @@ Pattern deserialize_pattern(const std::vector<uint8_t>& data) {
     p.period_frames = period;
     int32_t sig_len = 0;
     pull(&sig_len, sizeof(sig_len));
+    if (sig_len < 0 || sig_len > 10000) {
+        throw std::runtime_error("corrupt pattern data: invalid signature length");
+    }
     p.signature.resize(static_cast<size_t>(sig_len));
     pull(p.signature.data(), static_cast<size_t>(sig_len) * sizeof(float));
     int32_t joints_len = 0;
     pull(&joints_len, sizeof(joints_len));
+    if (joints_len < 0 || joints_len > 100) {
+        throw std::runtime_error("corrupt pattern data: invalid joints length");
+    }
     p.dominant_joints.resize(static_cast<size_t>(joints_len));
     pull(p.dominant_joints.data(), static_cast<size_t>(joints_len) * sizeof(int));
     return p;

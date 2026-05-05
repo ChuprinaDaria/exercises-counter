@@ -12,6 +12,7 @@ struct PeriodResult {
 std::vector<float> smooth(const std::vector<float>& signal, int window);
 std::vector<float> autocorrelate(const std::vector<float>& signal);
 std::optional<PeriodResult> find_period(const std::vector<float>& signal,
-                                        int min_period, int max_period);
+                                        int min_period, int max_period,
+                                        float min_strength = 0.3f);
 
 } // namespace exco

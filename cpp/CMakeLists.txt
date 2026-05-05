@@ -16,6 +16,7 @@ set(EXCO_HEADERS
 add_library(exco_core STATIC ${EXCO_SOURCES})
 target_include_directories(exco_core PUBLIC include)
 target_compile_features(exco_core PUBLIC cxx_std_17)
+set_target_properties(exco_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # pybind11 module
 find_package(pybind11 CONFIG QUIET)

@@ -3,6 +3,7 @@
 #include "exco/pattern.hpp"
 #include "exco/counter.hpp"
 #include <vector>
+#include <deque>
 #include <optional>
 #include <unordered_map>
 
@@ -50,8 +51,8 @@ private:
     AnalyzerConfig config_;
     PatternMatcher matcher_;
 
-    // Per-joint signal buffers
-    std::vector<std::vector<float>> joint_signals_;  // [joint_id][frame]
+    // Per-joint signal buffers (deque for O(1) pop_front)
+    std::vector<std::deque<float>> joint_signals_;  // [joint_id][frame]
     int frame_count_;
 
     // Per-pattern counters

@@ -50,7 +50,8 @@ std::vector<float> autocorrelate(const std::vector<float>& signal) {
 }
 
 std::optional<PeriodResult> find_period(const std::vector<float>& signal,
-                                        int min_period, int max_period) {
+                                        int min_period, int max_period,
+                                        float min_strength) {
     auto acorr = autocorrelate(signal);
     int n = static_cast<int>(acorr.size());
     if (n <= min_period) return std::nullopt;
@@ -60,7 +61,7 @@ std::optional<PeriodResult> find_period(const std::vector<float>& signal,
     // Find the first local peak above threshold in [min_period, max_period]
     for (int lag = min_period; lag < limit; ++lag) {
         float val = acorr[static_cast<size_t>(lag)];
-        if (val < 0.3f) continue;
+        if (val < min_strength) continue;
         // Check it's a local maximum
         float prev = (lag > 0) ? acorr[static_cast<size_t>(lag - 1)] : 0.0f;
         float next = (lag + 1 < n) ? acorr[static_cast<size_t>(lag + 1)] : 0.0f;

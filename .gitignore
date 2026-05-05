@@ -5,6 +5,9 @@ tests/fixtures/*.mp4
 build/
 *.db
 
+# MediaPipe model files
+*.task
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
