@@ -13,6 +13,7 @@ set(EXCO_HEADERS
     include/exco/analyzer_core.hpp
 )
 
+# Force rebuild after config changes (2026-05-06 v2)
 add_library(exco_core STATIC ${EXCO_SOURCES})
 target_include_directories(exco_core PUBLIC include)
 target_compile_features(exco_core PUBLIC cxx_std_17)

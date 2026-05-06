@@ -6,9 +6,10 @@ CLAUDE.md
 Прототип системи автоматичного підрахунку повторень фізичних вправ за відео. Джерело — realtime video stream (камера) або відеофайл. Система автоматично знаходить повторювані патерни руху без попередньо визначеного списку вправ.
 
 Вихід — потік подій:
-{pattern_id: int, count: int, timestamp: float}
+{pattern_id: int, count: int, timestamp: float, pattern_started: bool}
 
 Патерни зберігаються одразу в БД і розпізнаються з перших рухів при наступному запуску.
+При відновленні відомого патерну генерується подія pattern_started (count=0).
 
 Цільова платформа №1 — Raspberry Pi 5 + Camera Module.
 Цільові платформи №2 — x86 Windows, Apple Silicon macOS, arm64 iOS.
@@ -93,16 +94,24 @@ exercises-counter/
 
 Алгоритм (автодетекція патернів)
 1. Pose detection: MediaPipe → 33 landmarks (x, y, z, visibility) на кадр.
-2. Sliding window: ~3 сек (90 кадрів при 30fps) по y-координаті кожного joint.
-3. Dominant joints: знаходимо 5 joints з найвищою дисперсією.
-4. Composite signal: усереднюємо сигнали домінантних joints + smooth.
-5. Autocorrelation: шукаємо період повторення.
-6. Pattern extraction: вирізаємо один цикл, нормалізуємо до 0..1.
-7. DTW matching: порівнюємо з відомими патернами через Dynamic Time Warping.
-8. Якщо збіг → Schmitt trigger counter рахує реп.
-9. Якщо новий → зберігаємо як новий патерн, count = 1.
+2. Sliding window: ~2 сек (60 кадрів при 30fps) по y-координаті кожного joint.
+3. Dominant joints: знаходимо 5 joints з найвищою дисперсією серед MAJOR_JOINTS (11-16 руки, 23-28 ноги). Face/hands/feet ігноруються — занадто шумні.
+4. Low-visibility joints: якщо visibility < 0.5, тримаємо попереднє значення (hold last known).
+5. Composite signal: усереднюємо сигнали домінантних joints + smooth.
+6. Autocorrelation: шукаємо період повторення.
+7. Pattern extraction: вирізаємо один цикл, нормалізуємо до 0..1.
+8. DTW matching: порівнюємо з відомими патернами через Dynamic Time Warping. Додатково — перевірка overlap dominant joints (≥50%). Різні частини тіла = різна вправа.
+9. Pattern enrichment: при кожному матчі оновлюємо signature (80% old + 20% new) і розширюємо dominant_joints.
+10. Якщо збіг → Schmitt trigger counter рахує реп.
+11. Якщо новий → зберігаємо як новий патерн, count = 1.
+12. Pattern lifecycle: трекаємо active_pattern_id. Якщо патерн зʼявляється після паузи (30 frames без матчу) — генерується подія pattern_started.
 
-Правила порівняння: різна амплітуда = різний патерн, різна швидкість = різний патерн.
+Правила порівняння: різна амплітуда = різний патерн, різна швидкість = різний патерн, різні частини тіла = різний патерн.
+
+Потік подій (розширений):
+{pattern_id: int, count: int, timestamp: float}
+- count=0 означає "pattern started" (відомий патерн відновився)
+- pattern_id=-1 означає "new pattern detected"
 
 
 Принципи коду
@@ -133,9 +142,13 @@ python -m demo.cli path/to/video.mp4
 # CLI з камери:
 python -m demo.cli --camera 0
 
-# Web demo:
+# Web demo (з відео):
 python -m demo.web.server path/to/video.mp4
 # → http://localhost:8000
+
+# Web demo (з камери, live):
+python -m demo.web.server --camera 0
+# → http://localhost:8000 (stick figure + dashboard + real-time counting)
 
 # C++ тести:
 mkdir build && cd build && cmake .. -DEXCO_BUILD_TESTS=ON && cmake --build . && ./cpp/exco_tests
@@ -146,13 +159,23 @@ python -m pytest tests/ -v
 
 Тюнінг
 AnalyzerConfig параметри (описані в docs/TUNING.md):
-- window_frames (90) — розмір вікна
-- min_period (10) / max_period (90) — діапазон циклу
-- period_strength (0.4) — поріг автокореляції
-- dtw_threshold (2.0) — макс DTW дистанція для матчу
+- window_frames (60) — розмір вікна (~2 сек при 30fps)
+- min_period (10) / max_period (60) — діапазон циклу
+- period_strength (0.3) — поріг автокореляції (знижений для швидшої детекції)
+- dtw_threshold (0.8) — макс DTW дистанція для матчу (знижений для розрізнення вправ)
+- min_visibility (0.5) — мінімальна видимість joint для врахування
 - counter_down (0.3) / counter_up (0.7) — Schmitt trigger пороги
 - counter_min_frames (3) — антидрижання
 - smooth_window (5) — вікно згладжування
+
+Web demo (dashboard):
+- Stick figure: canvas з скелетом (тільки major joints, без обличчя)
+- Картки: Total Reps, Patterns, Duration, Reps/min + per-exercise
+- Timeline chart: графік повторень у часі
+- Pattern started toast: сповіщення при відновленні відомого патерну
+- WebSocket /ws/landmarks — стрім landmarks для stick figure
+- WebSocket /ws/events — стрім подій підрахунку
+- GET /api/stats — статистика сесії
 
 
 Робота з замовником

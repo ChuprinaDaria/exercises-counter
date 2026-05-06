@@ -66,7 +66,8 @@ PYBIND11_MODULE(_exco_cpp, m) {
         .def_readonly("count", &exco::AnalysisEvent::count)
         .def_readonly("period_frames", &exco::AnalysisEvent::period_frames)
         .def_readonly("signature", &exco::AnalysisEvent::signature)
-        .def_readonly("dominant_joints", &exco::AnalysisEvent::dominant_joints);
+        .def_readonly("dominant_joints", &exco::AnalysisEvent::dominant_joints)
+        .def_readonly("pattern_started", &exco::AnalysisEvent::pattern_started);
 
     // config
     py::class_<exco::AnalyzerConfig>(m, "AnalyzerConfig")

@@ -61,7 +61,8 @@ TEST_CASE("PatternMatcher — finds matching pattern") {
     matcher.add_pattern(p);
 
     std::vector<float> query = {1.0f, 2.0f, 3.0f, 2.0f, 1.0f};
-    auto match = matcher.find_match(query);
+    std::vector<int> joints = {0};
+    auto match = matcher.find_match(query, joints);
     REQUIRE(match.has_value());
     CHECK(match->id == 1);
 }
@@ -76,6 +77,7 @@ TEST_CASE("PatternMatcher — no match for different pattern") {
     matcher.add_pattern(p);
 
     std::vector<float> query = {10.0f, 0.0f, 10.0f, 0.0f, 10.0f};
-    auto match = matcher.find_match(query);
+    std::vector<int> joints = {0};
+    auto match = matcher.find_match(query, joints);
     CHECK_FALSE(match.has_value());
 }

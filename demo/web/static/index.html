@@ -6,76 +6,401 @@
     <title>Exercise Counter</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: monospace; background: #1a1a2e; color: #eee; padding: 2rem; }
-        h1 { margin-bottom: 1rem; color: #e94560; }
-        #exercises { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 2rem; }
-        .exercise-card {
-            background: #16213e; border: 2px solid #0f3460;
-            border-radius: 8px; padding: 1.5rem; min-width: 200px; text-align: center;
+        body { font-family: 'Segoe UI', monospace; background: #0f0f1a; color: #eee; }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 400px 1fr;
+            grid-template-rows: auto 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            height: 100vh;
         }
-        .exercise-card .count { font-size: 3rem; font-weight: bold; color: #e94560; }
-        .exercise-card .label { font-size: 0.9rem; color: #aaa; margin-top: 0.5rem; }
-        #log { background: #0f0f23; padding: 1rem; border-radius: 8px;
-               max-height: 400px; overflow-y: auto; font-size: 0.85rem; }
-        #log p { padding: 2px 0; border-bottom: 1px solid #1a1a2e; }
-        #status { margin-bottom: 1rem; color: #aaa; }
-        .connected { color: #4ecca3 !important; }
-        .disconnected { color: #e94560 !important; }
+
+        header {
+            grid-column: 1 / -1;
+            display: flex; align-items: center; gap: 1rem;
+        }
+        header h1 { font-size: 1.4rem; color: #e94560; }
+        #status {
+            font-size: 0.8rem; padding: 4px 12px;
+            border-radius: 12px; background: #1a1a2e;
+        }
+        .connected { color: #4ecca3; border: 1px solid #4ecca3; }
+        .disconnected { color: #e94560; border: 1px solid #e94560; }
+
+        /* Stick figure panel */
+        .stick-panel {
+            background: #1a1a2e; border-radius: 12px;
+            display: flex; flex-direction: column; align-items: center;
+            padding: 1rem; position: relative;
+        }
+        .stick-panel h2 { font-size: 0.9rem; color: #888; margin-bottom: 0.5rem; }
+        #stick-canvas {
+            background: #0f0f23; border-radius: 8px;
+            width: 100%; aspect-ratio: 3/4;
+        }
+        #frame-info {
+            font-size: 0.75rem; color: #555; margin-top: 0.5rem;
+        }
+
+        /* Right panel: dashboard */
+        .dashboard {
+            display: flex; flex-direction: column; gap: 1rem;
+            overflow-y: auto;
+        }
+
+        /* Counter cards */
+        .cards { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+        .card {
+            background: #1a1a2e; border-radius: 12px;
+            padding: 1.2rem 1.5rem; min-width: 140px; text-align: center;
+            border: 1px solid #16213e;
+        }
+        .card .value { font-size: 2.5rem; font-weight: 700; color: #e94560; }
+        .card .label { font-size: 0.75rem; color: #888; margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 1px; }
+        .card.accent .value { color: #4ecca3; }
+        .card.blue .value { color: #5eadff; }
+
+        /* Timeline chart */
+        .chart-box {
+            background: #1a1a2e; border-radius: 12px; padding: 1rem;
+            border: 1px solid #16213e;
+        }
+        .chart-box h3 { font-size: 0.85rem; color: #888; margin-bottom: 0.75rem; text-transform: uppercase; letter-spacing: 1px; }
+        #timeline-canvas { width: 100%; height: 180px; }
+
+        /* Event log */
+        .log-box {
+            background: #1a1a2e; border-radius: 12px; padding: 1rem;
+            border: 1px solid #16213e; flex: 1; min-height: 150px;
+            overflow-y: auto;
+        }
+        .log-box h3 { font-size: 0.85rem; color: #888; margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: 1px; }
+        #log p {
+            padding: 4px 8px; font-size: 0.8rem; font-family: monospace;
+            border-radius: 4px; margin-bottom: 2px;
+        }
+        #log p:nth-child(odd) { background: #16213e; }
+
+        @keyframes fadeout {
+            0% { opacity: 1; transform: translateY(0); }
+            70% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
-    <h1>Exercise Counter</h1>
-    <p id="status" class="disconnected">Disconnected</p>
-    <div id="exercises"></div>
-    <h2 style="margin-bottom: 0.5rem;">Event Log</h2>
-    <div id="log"></div>
+    <div class="layout">
+        <header>
+            <h1>Exercise Counter</h1>
+            <span id="status" class="disconnected">disconnected</span>
+        </header>
+
+        <div class="stick-panel">
+            <h2>Pose</h2>
+            <canvas id="stick-canvas"></canvas>
+            <div id="frame-info">waiting for data...</div>
+        </div>
+
+        <div class="dashboard">
+            <div class="cards" id="cards">
+                <div class="card"><div class="value" id="total-reps">0</div><div class="label">Total Reps</div></div>
+                <div class="card accent"><div class="value" id="patterns">0</div><div class="label">Patterns</div></div>
+                <div class="card blue"><div class="value" id="duration">0s</div><div class="label">Duration</div></div>
+                <div class="card"><div class="value" id="rpm">0</div><div class="label">Reps/min</div></div>
+            </div>
+
+            <div id="exercise-cards" class="cards"></div>
+
+            <div class="chart-box">
+                <h3>Rep Timeline</h3>
+                <canvas id="timeline-canvas"></canvas>
+            </div>
+
+            <div class="log-box">
+                <h3>Event Log</h3>
+                <div id="log"></div>
+            </div>
+        </div>
+    </div>
 
     <script>
-        const exercises = {};
-        const exercisesDiv = document.getElementById('exercises');
-        const logDiv = document.getElementById('log');
-        const statusEl = document.getElementById('status');
+    // --- Stick figure ---
+    // Body-only connections (no face mesh, no finger details)
+    const CONNECTIONS = [
+        [11,12],                                    // shoulders
+        [11,13],[13,15],                            // left arm
+        [12,14],[14,16],                            // right arm
+        [11,23],[12,24],[23,24],                    // torso
+        [23,25],[25,27],                            // left leg
+        [24,26],[26,28],                            // right leg
+    ];
+    const JOINT_COLORS = {
+        arm: [11,13,15,12,14,16], leg: [23,25,27,24,26,28],
+        torso: [11,12,23,24]
+    };
+    // Only render these joints (skip face 0-10, hands 17-22, feet 29-32)
+    const VISIBLE_JOINTS = new Set([11,12,13,14,15,16,23,24,25,26,27,28]);
 
-        function updateCard(patternId, count) {
-            exercises[patternId] = count;
-            exercisesDiv.innerHTML = '';
-            for (const [pid, cnt] of Object.entries(exercises)) {
-                const card = document.createElement('div');
-                card.className = 'exercise-card';
-                card.innerHTML = `
-                    <div class="count">${cnt}</div>
-                    <div class="label">Exercise #${pid}</div>
-                `;
-                exercisesDiv.appendChild(card);
+    const canvas = document.getElementById('stick-canvas');
+    const ctx = canvas.getContext('2d');
+    const frameInfo = document.getElementById('frame-info');
+
+    function resizeCanvas() {
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = rect.width * devicePixelRatio;
+        canvas.height = rect.height * devicePixelRatio;
+        ctx.scale(devicePixelRatio, devicePixelRatio);
+    }
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+
+    function drawStick(landmarks) {
+        const w = canvas.getBoundingClientRect().width;
+        const h = canvas.getBoundingClientRect().height;
+        ctx.clearRect(0, 0, w, h);
+
+        // connections
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        for (const [a, b] of CONNECTIONS) {
+            const la = landmarks[a], lb = landmarks[b];
+            if (la.v < 0.3 || lb.v < 0.3) continue;
+            const isArm = JOINT_COLORS.arm.includes(a) || JOINT_COLORS.arm.includes(b);
+            const isLeg = JOINT_COLORS.leg.includes(a) || JOINT_COLORS.leg.includes(b);
+            ctx.strokeStyle = isArm ? '#e94560' : isLeg ? '#4ecca3' : '#5eadff';
+            ctx.beginPath();
+            ctx.moveTo(la.x * w, la.y * h);
+            ctx.lineTo(lb.x * w, lb.y * h);
+            ctx.stroke();
+        }
+
+        // joints (body only)
+        for (let i = 0; i < landmarks.length; i++) {
+            if (!VISIBLE_JOINTS.has(i)) continue;
+            const lm = landmarks[i];
+            if (lm.v < 0.3) continue;
+            const isArm = JOINT_COLORS.arm.includes(i);
+            const isLeg = JOINT_COLORS.leg.includes(i);
+            ctx.fillStyle = isArm ? '#e94560' : isLeg ? '#4ecca3' : '#5eadff';
+            ctx.beginPath();
+            ctx.arc(lm.x * w, lm.y * h, 6, 0, Math.PI * 2);
+            ctx.fill();
+            // white center
+            ctx.fillStyle = '#0f0f23';
+            ctx.beginPath();
+            ctx.arc(lm.x * w, lm.y * h, 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // head — circle between shoulders
+        const ls = landmarks[11], rs = landmarks[12];
+        if (ls.v > 0.3 && rs.v > 0.3) {
+            const hx = (ls.x + rs.x) / 2;
+            const hy = Math.min(ls.y, rs.y) - 0.07;
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(hx * w, hy * h, 18, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+
+    // --- Dashboard state ---
+    const state = { events: [], patterns: 0, exerciseCounts: {} };
+    const statusEl = document.getElementById('status');
+    const logDiv = document.getElementById('log');
+
+    function updateDashboard() {
+        const events = state.events;
+        const totalReps = Math.max(0, ...events.map(e => e.count), 0);
+        const patternIds = new Set(events.map(e => e.pattern_id));
+        const timestamps = events.map(e => e.timestamp);
+        const minT = Math.min(...timestamps, 0);
+        const maxT = Math.max(...timestamps, 0);
+        const duration = maxT - minT;
+
+        document.getElementById('total-reps').textContent = totalReps;
+        document.getElementById('patterns').textContent = patternIds.size;
+        document.getElementById('duration').textContent = duration > 0 ? Math.round(duration) + 's' : '0s';
+        document.getElementById('rpm').textContent = duration > 30 ? (totalReps / (duration / 60)).toFixed(1) : '--';
+
+        // per-exercise cards
+        const container = document.getElementById('exercise-cards');
+        container.innerHTML = '';
+        for (const pid of patternIds) {
+            const maxCount = Math.max(...events.filter(e => e.pattern_id === pid).map(e => e.count));
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `<div class="value" style="color:#f0a500">${maxCount}</div><div class="label">Exercise #${pid}</div>`;
+            container.appendChild(card);
+        }
+
+        drawTimeline(events);
+    }
+
+    // --- Timeline chart ---
+    function drawTimeline(events) {
+        const tc = document.getElementById('timeline-canvas');
+        const tctx = tc.getContext('2d');
+        const rect = tc.getBoundingClientRect();
+        tc.width = rect.width * devicePixelRatio;
+        tc.height = rect.height * devicePixelRatio;
+        tctx.scale(devicePixelRatio, devicePixelRatio);
+        const w = rect.width, h = rect.height;
+
+        tctx.clearRect(0, 0, w, h);
+        if (events.length < 2) {
+            tctx.fillStyle = '#333';
+            tctx.font = '14px monospace';
+            tctx.textAlign = 'center';
+            tctx.fillText('waiting for reps...', w/2, h/2);
+            return;
+        }
+
+        const timestamps = events.map(e => e.timestamp);
+        const counts = events.map(e => e.count);
+        const minT = Math.min(...timestamps);
+        const maxT = Math.max(...timestamps);
+        const maxC = Math.max(...counts);
+        const pad = { l: 40, r: 20, t: 10, b: 30 };
+        const cw = w - pad.l - pad.r;
+        const ch = h - pad.t - pad.b;
+
+        // grid
+        tctx.strokeStyle = '#1a1a2e';
+        tctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+            const y = pad.t + (ch / 4) * i;
+            tctx.beginPath(); tctx.moveTo(pad.l, y); tctx.lineTo(w - pad.r, y); tctx.stroke();
+        }
+
+        // axes labels
+        tctx.fillStyle = '#555';
+        tctx.font = '11px monospace';
+        tctx.textAlign = 'right';
+        for (let i = 0; i <= 4; i++) {
+            const val = Math.round(maxC - (maxC / 4) * i);
+            tctx.fillText(val, pad.l - 5, pad.t + (ch / 4) * i + 4);
+        }
+        tctx.textAlign = 'center';
+        const timeSteps = 5;
+        for (let i = 0; i <= timeSteps; i++) {
+            const t = minT + ((maxT - minT) / timeSteps) * i;
+            const x = pad.l + (cw / timeSteps) * i;
+            tctx.fillText(Math.round(t) + 's', x, h - 5);
+        }
+
+        // line + dots
+        tctx.strokeStyle = '#e94560';
+        tctx.lineWidth = 2;
+        tctx.beginPath();
+        for (let i = 0; i < events.length; i++) {
+            const x = pad.l + ((timestamps[i] - minT) / (maxT - minT || 1)) * cw;
+            const y = pad.t + ch - (counts[i] / maxC) * ch;
+            if (i === 0) tctx.moveTo(x, y); else tctx.lineTo(x, y);
+        }
+        tctx.stroke();
+
+        // area fill
+        tctx.lineTo(pad.l + cw, pad.t + ch);
+        tctx.lineTo(pad.l, pad.t + ch);
+        tctx.closePath();
+        const grad = tctx.createLinearGradient(0, pad.t, 0, pad.t + ch);
+        grad.addColorStop(0, 'rgba(233,69,96,0.3)');
+        grad.addColorStop(1, 'rgba(233,69,96,0)');
+        tctx.fillStyle = grad;
+        tctx.fill();
+
+        // dots
+        for (let i = 0; i < events.length; i++) {
+            const x = pad.l + ((timestamps[i] - minT) / (maxT - minT || 1)) * cw;
+            const y = pad.t + ch - (counts[i] / maxC) * ch;
+            tctx.fillStyle = '#e94560';
+            tctx.beginPath();
+            tctx.arc(x, y, 4, 0, Math.PI * 2);
+            tctx.fill();
+            tctx.fillStyle = '#0f0f1a';
+            tctx.beginPath();
+            tctx.arc(x, y, 2, 0, Math.PI * 2);
+            tctx.fill();
+        }
+    }
+
+    function addLog(msg, type) {
+        const p = document.createElement('p');
+        p.textContent = msg;
+        if (type === 'started') {
+            p.style.color = '#f0a500';
+            p.style.fontWeight = 'bold';
+            p.style.borderLeft = '3px solid #f0a500';
+            p.style.paddingLeft = '8px';
+        }
+        logDiv.prepend(p);
+        if (logDiv.children.length > 100) logDiv.lastChild.remove();
+    }
+
+    // Toast notification for pattern start
+    function showToast(msg) {
+        const toast = document.createElement('div');
+        toast.textContent = msg;
+        toast.style.cssText = 'position:fixed;top:1rem;right:1rem;background:#f0a500;color:#0f0f1a;padding:12px 24px;border-radius:8px;font-weight:700;font-size:1.1rem;z-index:999;animation:fadeout 3s forwards';
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+    }
+
+    // --- WebSocket: events ---
+    function connectEvents() {
+        const ws = new WebSocket(`ws://${location.host}/ws/events`);
+        ws.onopen = () => {
+            statusEl.textContent = 'live';
+            statusEl.className = 'connected';
+        };
+        ws.onclose = () => {
+            statusEl.textContent = 'disconnected';
+            statusEl.className = 'disconnected';
+            setTimeout(connectEvents, 2000);
+        };
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            state.events.push(data);
+            if (data.count === 0) {
+                addLog(`[${data.timestamp}s] >>> Exercise #${data.pattern_id} STARTED`, 'started');
+                showToast(`Exercise #${data.pattern_id} started!`);
+            } else {
+                addLog(`[${data.timestamp}s] exercise #${data.pattern_id} rep ${data.count}`);
             }
-        }
+            updateDashboard();
+        };
+    }
 
-        function addLog(msg) {
-            const p = document.createElement('p');
-            p.textContent = msg;
-            logDiv.prepend(p);
-            if (logDiv.children.length > 200) logDiv.lastChild.remove();
-        }
+    // --- WebSocket: landmarks (stick figure) ---
+    function connectLandmarks() {
+        const ws = new WebSocket(`ws://${location.host}/ws/landmarks`);
+        ws.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            drawStick(data.landmarks);
+            frameInfo.textContent = `frame ${data.frame}`;
+        };
+        ws.onclose = () => setTimeout(connectLandmarks, 2000);
+    }
 
-        function connect() {
-            const ws = new WebSocket(`ws://${location.host}/ws/events`);
-            ws.onopen = () => {
-                statusEl.textContent = 'Connected';
-                statusEl.className = 'connected';
-            };
-            ws.onclose = () => {
-                statusEl.textContent = 'Disconnected — reconnecting...';
-                statusEl.className = 'disconnected';
-                setTimeout(connect, 2000);
-            };
-            ws.onmessage = (e) => {
-                const data = JSON.parse(e.data);
-                updateCard(data.pattern_id, data.count);
-                addLog(`[${data.timestamp}s] exercise #${data.pattern_id} — count: ${data.count}`);
-            };
-        }
+    // --- Init ---
+    connectEvents();
+    connectLandmarks();
 
-        connect();
+    // Load existing stats on page load
+    fetch('/api/stats').then(r => r.json()).then(data => {
+        state.events = data.events;
+        updateDashboard();
+    }).catch(() => {});
+
+    window.addEventListener('resize', () => drawTimeline(state.events));
     </script>
 </body>
 </html>

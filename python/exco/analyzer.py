@@ -76,6 +76,11 @@ class PatternAnalyzer:
                             self._db.write_pattern(
                                 sig_bytes, event.period_frames, joints_json
                             )
+                        elif event.pattern_started:
+                            # Known pattern resumed — write event with count=0
+                            self._db.write_event(
+                                event.pattern_id, 0, ts
+                            )
                         else:
                             self._db.write_event(
                                 event.pattern_id, event.count, ts

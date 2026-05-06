@@ -21,7 +21,11 @@ class PatternMatcher {
 public:
     explicit PatternMatcher(float dtw_threshold);
     void add_pattern(const Pattern& p);
-    std::optional<Pattern> find_match(const std::vector<float>& cycle) const;
+    std::optional<Pattern> find_match(const std::vector<float>& cycle,
+                                      const std::vector<int>& dominant_joints) const;
+    // Enrich existing pattern with new cycle observation (running average)
+    void update_pattern(int id, const std::vector<float>& cycle,
+                        const std::vector<int>& dominant_joints);
     const std::vector<Pattern>& patterns() const;
 private:
     float dtw_threshold_;

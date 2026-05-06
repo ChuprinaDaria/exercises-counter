@@ -11,7 +11,9 @@ AnalyzerCore::AnalyzerCore(AnalyzerConfig config)
     , matcher_(config.dtw_threshold)
     , joint_signals_(static_cast<size_t>(config.num_joints))
     , frame_count_(0)
-    , next_pattern_id_(1) {}
+    , next_pattern_id_(1)
+    , active_pattern_id_(-1)
+    , no_match_frames_(0) {}
 
 void AnalyzerCore::load_pattern(const Pattern& p) {
     matcher_.add_pattern(p);
@@ -29,7 +31,7 @@ const AnalyzerConfig& AnalyzerCore::config() const {
 
 std::vector<int> AnalyzerCore::find_dominant_joints(int top_n) const {
     std::vector<std::pair<float, int>> variances;
-    for (int j = 0; j < config_.num_joints; ++j) {
+    for (int j : MAJOR_JOINTS) {
         const auto& sig = joint_signals_[static_cast<size_t>(j)];
         if (sig.size() < 2) {
             variances.push_back({0.0f, j});
@@ -79,9 +81,15 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
     }
 
     // Append y-coordinate of each joint to signal buffers
+    // Use previous value for low-visibility joints to avoid noise
     for (int j = 0; j < config_.num_joints; ++j) {
         auto& sig = joint_signals_[static_cast<size_t>(j)];
-        sig.push_back(landmarks[static_cast<size_t>(j)].y);
+        float val = landmarks[static_cast<size_t>(j)].y;
+        if (landmarks[static_cast<size_t>(j)].visibility < config_.min_visibility
+            && !sig.empty()) {
+            val = sig.back();  // hold last known position
+        }
+        sig.push_back(val);
         if (static_cast<int>(sig.size()) > config_.window_frames) {
             sig.pop_front();
         }
@@ -116,7 +124,7 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
         }
     }
 
-    auto match = matcher_.find_match(cycle);
+    auto match = matcher_.find_match(cycle, dominant);
 
     // Normalize current composite value for counter
     float current = composite.back();
@@ -127,6 +135,15 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
         : 0.5f;
 
     if (match.has_value()) {
+        no_match_frames_ = 0;
+
+        // Detect pattern (re)start: different from active, or resumed after pause
+        bool started = (match->id != active_pattern_id_);
+        active_pattern_id_ = match->id;
+
+        // Enrich pattern with new observation
+        matcher_.update_pattern(match->id, cycle, dominant);
+
         auto it = counters_.find(match->id);
         if (it == counters_.end()) {
             counters_.emplace(match->id, RepCounter(config_.counter_down,
@@ -136,11 +153,22 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
         }
         int prev = it->second.count();
         it->second.push(normalized);
+
+        if (started) {
+            // Emit pattern_started event
+            return AnalysisEvent{match->id, it->second.count(),
+                                 period, {}, {}, true};
+        }
         if (it->second.count() > prev) {
             return AnalysisEvent{match->id, it->second.count(),
-                                 period, {}, {}};
+                                 period, {}, {}, false};
         }
     } else {
+        ++no_match_frames_;
+        if (no_match_frames_ >= PAUSE_FRAMES) {
+            active_pattern_id_ = -1;  // pattern stopped
+        }
+
         Pattern new_p;
         new_p.id = next_pattern_id_++;
         new_p.period_frames = period;
@@ -150,7 +178,8 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
         counters_.emplace(new_p.id, RepCounter(config_.counter_down,
                                                 config_.counter_up,
                                                 config_.counter_min_frames));
-        return AnalysisEvent{-1, 0, period, cycle, dominant};
+        active_pattern_id_ = new_p.id;
+        return AnalysisEvent{-1, 0, period, cycle, dominant, false};
     }
 
     return std::nullopt;

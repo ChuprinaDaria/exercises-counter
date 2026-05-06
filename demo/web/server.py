@@ -13,9 +13,6 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from exco.db import ExcoDB
-from exco.writer import LandmarkWriter
-from exco.analyzer import PatternAnalyzer
-from exco.pose.mediapipe_backend import MediaPipeBackend
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -29,6 +26,31 @@ DB_PATH = "exercises.db"
 async def index() -> HTMLResponse:
     html = (STATIC_DIR / "index.html").read_text()
     return HTMLResponse(html)
+
+
+@app.get("/api/stats")
+async def api_stats() -> dict:
+    db = ExcoDB(DB_PATH)
+    patterns = db.read_patterns()
+    events = db.read_events_since(0)
+    landmarks = db.read_landmarks_since(0, 0.0)
+    db.close()
+
+    max_ts = max((e["timestamp"] for e in events), default=0.0)
+    min_ts = min((e["timestamp"] for e in events), default=0.0)
+    duration = max_ts - min_ts if events else 0.0
+
+    return {
+        "patterns": len(patterns),
+        "total_reps": max((e["count"] for e in events), default=0),
+        "events": [
+            {"pattern_id": e["pattern_id"], "count": e["count"],
+             "timestamp": round(e["timestamp"], 2)}
+            for e in events
+        ],
+        "duration": round(duration, 1),
+        "total_frames": len(set(r["frame_id"] for r in landmarks)),
+    }
 
 
 @app.websocket("/ws/events")
@@ -53,13 +75,50 @@ async def ws_events(ws: WebSocket) -> None:
         db.close()
 
 
+@app.websocket("/ws/landmarks")
+async def ws_landmarks(ws: WebSocket) -> None:
+    await ws.accept()
+    db = ExcoDB(DB_PATH)
+    last_frame = -1
+    try:
+        while True:
+            rows = db.read_landmarks_since(last_frame + 1, 0.0)
+            if not rows:
+                await asyncio.sleep(0.05)
+                continue
+
+            frames: dict[int, list[dict]] = {}
+            for r in rows:
+                frames.setdefault(r["frame_id"], []).append(r)
+
+            for fid in sorted(frames.keys()):
+                joints = sorted(frames[fid], key=lambda r: r["joint_id"])
+                if len(joints) != 33:
+                    last_frame = fid
+                    continue
+                payload = [
+                    {"x": j["x"], "y": j["y"], "v": j["visibility"]}
+                    for j in joints
+                ]
+                await ws.send_text(json.dumps({"frame": fid, "landmarks": payload}))
+                last_frame = fid
+                await asyncio.sleep(0.033)  # ~30fps playback
+    except WebSocketDisconnect:
+        pass
+    finally:
+        db.close()
+
+
 def run_writer(source: str | int, db_path: str) -> None:
+    from exco.pose.mediapipe_backend import MediaPipeBackend
+    from exco.writer import LandmarkWriter
     detector = MediaPipeBackend(model_complexity=1)
     writer = LandmarkWriter(source, db_path, detector)
     writer.run()
 
 
 def run_analyzer(db_path: str) -> None:
+    from exco.analyzer import PatternAnalyzer
     analyzer = PatternAnalyzer(db_path)
     analyzer.run()
 

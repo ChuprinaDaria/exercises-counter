@@ -103,10 +103,26 @@ void PatternMatcher::add_pattern(const Pattern& p) {
     patterns_.push_back(p);
 }
 
-std::optional<Pattern> PatternMatcher::find_match(const std::vector<float>& cycle) const {
+std::optional<Pattern> PatternMatcher::find_match(
+        const std::vector<float>& cycle,
+        const std::vector<int>& dominant_joints) const {
     float best_dist = dtw_threshold_;
     const Pattern* best = nullptr;
     for (const auto& p : patterns_) {
+        // Require at least 60% overlap in dominant joints
+        if (!dominant_joints.empty() && !p.dominant_joints.empty()) {
+            int overlap = 0;
+            for (int j : dominant_joints) {
+                for (int pj : p.dominant_joints) {
+                    if (j == pj) { ++overlap; break; }
+                }
+            }
+            int min_size = std::min(static_cast<int>(dominant_joints.size()),
+                                     static_cast<int>(p.dominant_joints.size()));
+            if (min_size > 0 && overlap < (min_size + 1) / 2) {
+                continue;  // different body parts → different exercise
+            }
+        }
         float d = dtw_distance(cycle, p.signature);
         if (d < best_dist) {
             best_dist = d;
@@ -115,6 +131,28 @@ std::optional<Pattern> PatternMatcher::find_match(const std::vector<float>& cycl
     }
     if (best != nullptr) return *best;
     return std::nullopt;
+}
+
+void PatternMatcher::update_pattern(int id, const std::vector<float>& cycle,
+                                     const std::vector<int>& dominant_joints) {
+    for (auto& p : patterns_) {
+        if (p.id != id) continue;
+        // Running average of signature (blend 80% old + 20% new)
+        if (p.signature.size() == cycle.size()) {
+            for (size_t i = 0; i < p.signature.size(); ++i) {
+                p.signature[i] = 0.8f * p.signature[i] + 0.2f * cycle[i];
+            }
+        }
+        // Merge dominant joints (add new ones not already present)
+        for (int j : dominant_joints) {
+            bool found = false;
+            for (int pj : p.dominant_joints) {
+                if (pj == j) { found = true; break; }
+            }
+            if (!found) p.dominant_joints.push_back(j);
+        }
+        break;
+    }
 }
 
 const std::vector<Pattern>& PatternMatcher::patterns() const {
