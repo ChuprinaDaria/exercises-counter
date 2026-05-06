@@ -6,7 +6,7 @@ import sys
 import time
 
 from exco.db import ExcoDB
-from exco.writer import LandmarkWriter
+from exco.writer import LandmarkWriter, find_camera
 from exco.analyzer import PatternAnalyzer
 from exco.pose.mediapipe_backend import MediaPipeBackend
 
@@ -53,7 +53,11 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.video is None and args.camera is None:
-        parser.error("Provide a video file path or --camera N")
+        cam = find_camera()
+        if cam is None:
+            parser.error("No camera found. Provide a video file or --camera N")
+        print(f"Auto-detected camera at index {cam}")
+        args.camera = cam
 
     source: str | int = args.video if args.video else args.camera
 

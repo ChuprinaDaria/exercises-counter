@@ -55,3 +55,17 @@ Works natively:
 ```bash
 pip install -e ".[web,dev]"
 ```
+
+## iOS Integration
+
+The C++ core (`exco_core`) compiles on arm64 and has zero dependencies beyond STL.
+`PoseDetector` is a protocol-based interface — iOS developers can implement it using
+Apple Vision (`VNDetectHumanBodyPoseRequest`) instead of MediaPipe.
+
+Integration path:
+1. Add `cpp/` sources to an Xcode project (C++17, no extra libs needed)
+2. Implement `PoseDetector` protocol using Vision framework
+3. Feed landmarks to `AnalyzerCore::push_frame()` via the C++ API
+
+No standalone iOS build target is included — this is a library meant to be
+embedded into a native iOS app.

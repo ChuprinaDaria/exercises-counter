@@ -136,6 +136,16 @@ def main() -> None:
     DB_PATH = args.db
 
     procs: list[multiprocessing.Process] = []
+    if args.video is None and args.camera is None:
+        from exco.writer import find_camera
+        cam = find_camera()
+        if cam is not None:
+            print(f"Auto-detected camera at index {cam}")
+            args.camera = cam
+        else:
+            print("No camera found. Starting server without capture "
+                  "(provide a video file or --camera N to enable)")
+
     if args.video or args.camera is not None:
         source: str | int = args.video if args.video else args.camera
         wp = multiprocessing.Process(target=run_writer, args=(source, args.db))

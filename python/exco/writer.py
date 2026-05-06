@@ -7,6 +7,16 @@ from exco.db import ExcoDB
 from exco.pose.base import PoseDetector
 
 
+def find_camera(max_index: int = 4) -> int | None:
+    """Try camera indices 0..max_index-1, return first that opens."""
+    for i in range(max_index):
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            cap.release()
+            return i
+    return None
+
+
 class LandmarkWriter:
     def __init__(
         self,

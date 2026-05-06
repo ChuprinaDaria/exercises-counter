@@ -8,15 +8,21 @@ patterns — no predefined exercise list. Patterns are learned and persisted.
 ```bash
 pip install -e ".[web]"
 
-# Count exercises from video file
+# Auto-detect camera and start counting
+python -m demo.cli
+
+# Or specify a video file
 python -m demo.cli path/to/video.mp4
 
-# Count from camera
+# Or specify camera index explicitly
 python -m demo.cli --camera 0
 
-# Web dashboard
-python -m demo.web.server path/to/video.mp4
+# Web dashboard (auto-detects camera if no source given)
+python -m demo.web.server
 # → http://localhost:8000
+
+# Web dashboard with video file
+python -m demo.web.server path/to/video.mp4
 ```
 
 ## How It Works
