@@ -34,6 +34,9 @@ struct AnalyzerConfig {
     int counter_min_frames = 3;
     int smooth_window = 5;
     int num_joints = 33;
+    int new_pattern_delay = 15;    // frames before creating new pattern (~0.5s at 30fps)
+    int pattern_switch_frames = 10; // consecutive matches needed to switch active pattern
+
 };
 
 class AnalyzerCore {
@@ -64,7 +67,9 @@ private:
     // Active pattern tracking
     int active_pattern_id_;       // currently matched pattern (-1 = none)
     int no_match_frames_;         // frames since last match
-    static constexpr int PAUSE_FRAMES = 30;  // ~1 sec gap = pattern stopped
+    int pending_pattern_id_;      // candidate pattern for switch
+    int pending_pattern_frames_;  // consecutive matches of candidate
+    static constexpr int PAUSE_FRAMES = 90;  // ~3 sec gap = pattern stopped
 
     std::vector<int> find_dominant_joints(int top_n) const;
 

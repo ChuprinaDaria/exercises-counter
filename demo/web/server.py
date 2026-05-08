@@ -8,11 +8,14 @@ import time
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.responses import JSONResponse
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from exco.db import ExcoDB
+from exco.body_parts import joints_to_body_parts
+from exco.routine import RoutineDetector
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -20,6 +23,7 @@ app = FastAPI(title="Exercise Counter")
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 DB_PATH = "exercises.db"
+_routine_detector = RoutineDetector()
 
 
 @app.get("/")
@@ -33,23 +37,41 @@ async def api_stats() -> dict:
     db = ExcoDB(DB_PATH)
     patterns = db.read_patterns()
     events = db.read_events_since(0)
-    landmarks = db.read_landmarks_since(0, 0.0)
     db.close()
 
-    max_ts = max((e["timestamp"] for e in events), default=0.0)
-    min_ts = min((e["timestamp"] for e in events), default=0.0)
-    duration = max_ts - min_ts if events else 0.0
+    # Rebuild routine state from existing events
+    routine_det = RoutineDetector()
+    last_pattern = None
+    for e in events:
+        pid = e["pattern_id"]
+        if e["count"] == 0 and pid != last_pattern:
+            routine_det.push(pid)
+            last_pattern = pid
+
+    routine = routine_det.routine
+    # Update global detector to match
+    global _routine_detector
+    _routine_detector = routine_det
 
     return {
-        "patterns": len(patterns),
-        "total_reps": max((e["count"] for e in events), default=0),
+        "patterns": [
+            {
+                "id": p["id"],
+                "dominant_joints": json.loads(p["dominant_joints"]),
+                "body_parts": joints_to_body_parts(json.loads(p["dominant_joints"])),
+            }
+            for p in patterns
+        ],
         "events": [
             {"pattern_id": e["pattern_id"], "count": e["count"],
              "timestamp": round(e["timestamp"], 2)}
             for e in events
         ],
-        "duration": round(duration, 1),
-        "total_frames": len(set(r["frame_id"] for r in landmarks)),
+        "routine": {
+            "routine_id": routine.routine_id,
+            "sequence": routine.sequence,
+            "sets": routine.sets,
+        } if routine else None,
     }
 
 
@@ -58,16 +80,31 @@ async def ws_events(ws: WebSocket) -> None:
     await ws.accept()
     db = ExcoDB(DB_PATH)
     last_id = 0
+    last_pattern = None
     try:
         while True:
             events = db.read_events_since(last_id)
             for e in events:
                 await ws.send_text(json.dumps({
+                    "type": "exercise",
                     "pattern_id": e["pattern_id"],
                     "count": e["count"],
                     "timestamp": round(e["timestamp"], 2),
                 }))
                 last_id = e["id"]
+
+                # Feed pattern transitions to routine detector
+                pid = e["pattern_id"]
+                if e["count"] == 0 and pid != last_pattern:
+                    routine_event = _routine_detector.push(pid)
+                    last_pattern = pid
+                    if routine_event:
+                        await ws.send_text(json.dumps({
+                            "type": "routine",
+                            "routine_id": routine_event.routine_id,
+                            "sequence": routine_event.sequence,
+                            "sets": routine_event.sets,
+                        }))
             await asyncio.sleep(0.2)
     except WebSocketDisconnect:
         pass
@@ -79,7 +116,8 @@ async def ws_events(ws: WebSocket) -> None:
 async def ws_landmarks(ws: WebSocket) -> None:
     await ws.accept()
     db = ExcoDB(DB_PATH)
-    last_frame = -1
+    # Start from latest frame (don't replay old data on reconnect)
+    last_frame = db.max_frame_id()
     try:
         while True:
             rows = db.read_landmarks_since(last_frame + 1, 0.0)

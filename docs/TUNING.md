@@ -14,6 +14,7 @@
 | `counter_up` | 0.7 | Schmitt trigger high threshold |
 | `counter_min_frames` | 3 | Min frames in state before transition (anti-jitter) |
 | `smooth_window` | 5 | Moving average window |
+| `new_pattern_delay` | 15 | Frames without match before creating new pattern (~0.5s debounce) |
 
 ## Common Adjustments
 
@@ -28,8 +29,9 @@
 **Merging different exercises into one:**
 - Decrease `dtw_threshold` (e.g., 0.8 → 0.5)
 
-**Splitting same exercise into multiple:**
+**Splitting same exercise into multiple (pattern fragmentation):**
 - Increase `dtw_threshold` (e.g., 0.8 → 1.2)
+- Increase `new_pattern_delay` (e.g., 15 → 30)
 
 **Slow exercises not detected:**
 - Increase `max_period` and `window_frames`

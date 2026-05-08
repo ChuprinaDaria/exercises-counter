@@ -75,7 +75,9 @@ exercises-counter/
 │   ├── db.py                  # SQLite schema + read/write (WAL)
 │   ├── writer.py              # Video → pose → DB
 │   ├── analyzer.py            # DB → C++ core → events → DB
-│   └── events.py              # @dataclass ExerciseEvent
+│   ├── events.py              # @dataclass ExerciseEvent
+│   ├── body_parts.py          # Joint index → body part name mapping
+│   └── routine.py             # RoutineDetector — repeating sequence detection
 │
 ├── demo/
 │   ├── cli.py
@@ -87,7 +89,8 @@ exercises-counter/
 ├── docs/
 │   ├── BUILD.md
 │   ├── ARCHITECTURE.md
-│   └── TUNING.md
+│   ├── TUNING.md
+│   └── ROUTINE_SPEC.md        # Routine detection spec
 │
 └── .github/workflows/build.yml
 
@@ -108,10 +111,16 @@ exercises-counter/
 
 Правила порівняння: різна амплітуда = різний патерн, різна швидкість = різний патерн, різні частини тіла = різний патерн.
 
-Потік подій (розширений):
+Потік подій:
+Exercise events (WebSocket type="exercise"):
 {pattern_id: int, count: int, timestamp: float}
-- count=0 означає "pattern started" (відомий патерн відновився)
-- pattern_id=-1 означає "new pattern detected"
+- count=0 означає "exercise started" (новий або відновлений)
+- count>0 означає "rep counted" (Шмітт-тригер спрацював)
+
+Routine events (WebSocket type="routine"):
+{routine_id: int, sequence: [int], sets: int}
+- Генерується коли послідовність вправ повторюється ≥2 рази
+- Routine фіксується при першому виявленні, далі тільки sets інкрементується
 
 
 Принципи коду

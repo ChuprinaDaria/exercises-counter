@@ -27,16 +27,38 @@ python -m demo.web.server path/to/video.mp4
 
 ## How It Works
 
-1. **Writer** captures video, runs MediaPipe pose detection, saves landmarks to SQLite
-2. **Analyzer** reads landmarks, detects repeating patterns via autocorrelation + DTW
-3. New patterns are saved immediately, recognized on next run
-4. Events stream to CLI or web dashboard via WebSocket
+### Exercise Detection
+Individual exercises detected automatically — no predefined list needed.
+
+1. **Writer** captures video → MediaPipe pose detection → landmarks to SQLite
+2. **Analyzer** reads landmarks → autocorrelation finds periodicity → DTW matches patterns
+3. Schmitt trigger counts each repetition (up-down cycle)
+4. New exercises are saved immediately, recognized on next run
+
+### Routine Detection
+When exercises appear in a repeating sequence, that's a **routine**.
+
+Example: arm raises → squats → bends → arm raises → squats → bends = routine [#1→#2→#3], 2 sets.
+
+Routine is detected after ≥2 complete passes through the same sequence. Once detected, the routine is locked — further passes increment the set counter.
+
+### Terminology
+
+| Term | Meaning | Example |
+|------|---------|---------|
+| **Exercise** | One type of detected movement | Arm raises, squats |
+| **Count** | How many repetitions within an exercise | 12 arm raises = count 12 |
+| **Routine** | Ordered sequence of different exercises that repeats | [arm raises → squats → bends] |
+| **Set** | One full pass through a routine | Did all 3 exercises once = 1 set |
+
+Events stream to CLI or web dashboard via WebSocket.
 
 ## Docs
 
 - [Build Instructions](docs/BUILD.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Tuning Guide](docs/TUNING.md)
+- [Routine Detection Spec](docs/ROUTINE_SPEC.md)
 
 ## Target Platforms
 

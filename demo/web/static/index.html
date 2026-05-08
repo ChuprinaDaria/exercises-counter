@@ -50,17 +50,48 @@
             overflow-y: auto;
         }
 
-        /* Counter cards */
+        /* Pattern cards */
         .cards { display: flex; flex-wrap: wrap; gap: 0.75rem; }
         .card {
             background: #1a1a2e; border-radius: 12px;
-            padding: 1.2rem 1.5rem; min-width: 140px; text-align: center;
+            padding: 1.2rem 1.5rem; min-width: 180px;
             border: 1px solid #16213e;
         }
-        .card .value { font-size: 2.5rem; font-weight: 700; color: #e94560; }
-        .card .label { font-size: 0.75rem; color: #888; margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 1px; }
-        .card.accent .value { color: #4ecca3; }
-        .card.blue .value { color: #5eadff; }
+        .card .reps { font-size: 2.8rem; font-weight: 700; color: #f0a500; }
+        .card .name { font-size: 0.9rem; color: #eee; margin-bottom: 0.3rem; }
+        .card .body-parts { font-size: 0.7rem; color: #888; margin-top: 0.3rem; }
+
+        /* Summary box */
+        .summary-box {
+            background: #1a1a2e; border-radius: 12px; padding: 1rem;
+            border: 1px solid #16213e;
+        }
+        .summary-box h3 {
+            font-size: 0.85rem; color: #888; margin-bottom: 0.5rem;
+            text-transform: uppercase; letter-spacing: 1px;
+        }
+        .summary-row {
+            display: flex; justify-content: space-between;
+            padding: 3px 0; font-size: 0.8rem;
+        }
+        .summary-row .part-name { color: #aaa; }
+        .summary-row .part-count { color: #4ecca3; font-weight: 600; }
+
+        /* Routine banner */
+        .routine-banner {
+            background: #1a1a2e; border-radius: 12px; padding: 1rem 1.5rem;
+            border: 1px solid #3a86ff; display: none;
+        }
+        .routine-banner .routine-label {
+            font-size: 0.75rem; color: #3a86ff; text-transform: uppercase;
+            letter-spacing: 1px; margin-bottom: 0.3rem;
+        }
+        .routine-banner .routine-seq {
+            font-size: 1.1rem; color: #eee; font-weight: 600;
+        }
+        .routine-banner .routine-sets {
+            font-size: 0.85rem; color: #3a86ff; margin-left: 1rem;
+        }
 
         /* Timeline chart */
         .chart-box {
@@ -108,17 +139,21 @@
         </div>
 
         <div class="dashboard">
-            <div class="cards" id="cards">
-                <div class="card"><div class="value" id="total-reps">0</div><div class="label">Total Reps</div></div>
-                <div class="card accent"><div class="value" id="patterns">0</div><div class="label">Patterns</div></div>
-                <div class="card blue"><div class="value" id="duration">0s</div><div class="label">Duration</div></div>
-                <div class="card"><div class="value" id="rpm">0</div><div class="label">Reps/min</div></div>
-            </div>
-
             <div id="exercise-cards" class="cards"></div>
 
+            <div id="routine-banner" class="routine-banner">
+                <div class="routine-label">Routine</div>
+                <span class="routine-seq" id="routine-seq"></span>
+                <span class="routine-sets" id="routine-sets"></span>
+            </div>
+
+            <div id="body-summary" class="summary-box" style="display:none">
+                <h3>Body parts</h3>
+                <div id="body-parts-list"></div>
+            </div>
+
             <div class="chart-box">
-                <h3>Rep Timeline</h3>
+                <h3>Timeline</h3>
                 <canvas id="timeline-canvas"></canvas>
             </div>
 
@@ -131,21 +166,27 @@
 
     <script>
     // --- Stick figure ---
-    // Body-only connections (no face mesh, no finger details)
     const CONNECTIONS = [
-        [11,12],                                    // shoulders
-        [11,13],[13,15],                            // left arm
-        [12,14],[14,16],                            // right arm
-        [11,23],[12,24],[23,24],                    // torso
-        [23,25],[25,27],                            // left leg
-        [24,26],[26,28],                            // right leg
+        [11,12],
+        [11,13],[13,15],
+        [12,14],[14,16],
+        [11,23],[12,24],[23,24],
+        [23,25],[25,27],
+        [24,26],[26,28],
     ];
     const JOINT_COLORS = {
         arm: [11,13,15,12,14,16], leg: [23,25,27,24,26,28],
         torso: [11,12,23,24]
     };
-    // Only render these joints (skip face 0-10, hands 17-22, feet 29-32)
     const VISIBLE_JOINTS = new Set([11,12,13,14,15,16,23,24,25,26,27,28]);
+
+    // Joint ID → body part name (used for stick figure coloring only;
+    // dashboard gets body_parts from API via body_parts.py)
+    const JOINT_TO_PART = {};
+    [11,12].forEach(j => JOINT_TO_PART[j] = 'Shoulders');
+    [13,14,15,16].forEach(j => JOINT_TO_PART[j] = 'Arms');
+    [23,24].forEach(j => JOINT_TO_PART[j] = 'Hips');
+    [25,26,27,28].forEach(j => JOINT_TO_PART[j] = 'Legs');
 
     const canvas = document.getElementById('stick-canvas');
     const ctx = canvas.getContext('2d');
@@ -165,7 +206,6 @@
         const h = canvas.getBoundingClientRect().height;
         ctx.clearRect(0, 0, w, h);
 
-        // connections
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
         for (const [a, b] of CONNECTIONS) {
@@ -180,7 +220,6 @@
             ctx.stroke();
         }
 
-        // joints (body only)
         for (let i = 0; i < landmarks.length; i++) {
             if (!VISIBLE_JOINTS.has(i)) continue;
             const lm = landmarks[i];
@@ -191,14 +230,12 @@
             ctx.beginPath();
             ctx.arc(lm.x * w, lm.y * h, 6, 0, Math.PI * 2);
             ctx.fill();
-            // white center
             ctx.fillStyle = '#0f0f23';
             ctx.beginPath();
             ctx.arc(lm.x * w, lm.y * h, 2, 0, Math.PI * 2);
             ctx.fill();
         }
 
-        // head — circle between shoulders
         const ls = landmarks[11], rs = landmarks[12];
         if (ls.v > 0.3 && rs.v > 0.3) {
             const hx = (ls.x + rs.x) / 2;
@@ -212,36 +249,81 @@
     }
 
     // --- Dashboard state ---
-    const state = { events: [], patterns: 0, exerciseCounts: {} };
+    const state = {
+        events: [],
+        patternInfo: {},  // {id: {dominant_joints: [...], body_parts: [...]}}
+        knownPatterns: new Set(),
+        routine: null,    // {routine_id, sequence, sets}
+    };
     const statusEl = document.getElementById('status');
     const logDiv = document.getElementById('log');
 
     function updateDashboard() {
         const events = state.events;
-        const totalReps = Math.max(0, ...events.map(e => e.count), 0);
-        const patternIds = new Set(events.map(e => e.pattern_id));
-        const timestamps = events.map(e => e.timestamp);
-        const minT = Math.min(...timestamps, 0);
-        const maxT = Math.max(...timestamps, 0);
-        const duration = maxT - minT;
+        const patternIds = [...new Set(events.map(e => e.pattern_id))].sort((a, b) => a - b);
 
-        document.getElementById('total-reps').textContent = totalReps;
-        document.getElementById('patterns').textContent = patternIds.size;
-        document.getElementById('duration').textContent = duration > 0 ? Math.round(duration) + 's' : '0s';
-        document.getElementById('rpm').textContent = duration > 30 ? (totalReps / (duration / 60)).toFixed(1) : '--';
-
-        // per-exercise cards
+        // Per-exercise cards
         const container = document.getElementById('exercise-cards');
         container.innerHTML = '';
+        const bodyPartReps = {};  // {partName: totalReps}
+
         for (const pid of patternIds) {
-            const maxCount = Math.max(...events.filter(e => e.pattern_id === pid).map(e => e.count));
+            const maxCount = Math.max(0, ...events.filter(e => e.pattern_id === pid).map(e => e.count));
+            const info = state.patternInfo[pid];
+            const parts = info ? (info.body_parts || []) : [];
+
             const card = document.createElement('div');
             card.className = 'card';
-            card.innerHTML = `<div class="value" style="color:#f0a500">${maxCount}</div><div class="label">Exercise #${pid}</div>`;
+            card.innerHTML = `<div class="name">Exercise #${pid}</div>`
+                + `<div class="reps">${maxCount}</div>`
+                + (parts.length ? `<div class="body-parts">${parts.join(', ')}</div>` : '');
             container.appendChild(card);
+
+            // Accumulate body part reps
+            for (const part of parts) {
+                bodyPartReps[part] = (bodyPartReps[part] || 0) + maxCount;
+            }
+        }
+
+        // Body parts summary
+        const summaryBox = document.getElementById('body-summary');
+        const partsList = document.getElementById('body-parts-list');
+        const partNames = Object.keys(bodyPartReps);
+        if (partNames.length > 0) {
+            summaryBox.style.display = '';
+            partsList.innerHTML = '';
+            for (const part of partNames.sort()) {
+                const row = document.createElement('div');
+                row.className = 'summary-row';
+                row.innerHTML = `<span class="part-name">${part}</span><span class="part-count">${bodyPartReps[part]} repeats</span>`;
+                partsList.appendChild(row);
+            }
+        }
+
+        // Routine banner
+        const banner = document.getElementById('routine-banner');
+        if (state.routine) {
+            banner.style.display = '';
+            document.getElementById('routine-seq').textContent =
+                state.routine.sequence.map(id => `#${id}`).join(' → ');
+            document.getElementById('routine-sets').textContent =
+                `${state.routine.sets} sets`;
         }
 
         drawTimeline(events);
+    }
+
+    function fetchPatternInfo() {
+        fetch('/api/stats').then(r => r.json()).then(data => {
+            for (const p of data.patterns) {
+                state.patternInfo[p.id] = {
+                    dominant_joints: p.dominant_joints,
+                    body_parts: p.body_parts || [],
+                };
+            }
+            if (data.routine) state.routine = data.routine;
+            updateDashboard();
+        }).catch(() => {});
     }
 
     // --- Timeline chart ---
@@ -259,7 +341,7 @@
             tctx.fillStyle = '#333';
             tctx.font = '14px monospace';
             tctx.textAlign = 'center';
-            tctx.fillText('waiting for reps...', w/2, h/2);
+            tctx.fillText('waiting for data...', w/2, h/2);
             return;
         }
 
@@ -272,7 +354,6 @@
         const cw = w - pad.l - pad.r;
         const ch = h - pad.t - pad.b;
 
-        // grid
         tctx.strokeStyle = '#1a1a2e';
         tctx.lineWidth = 1;
         for (let i = 0; i <= 4; i++) {
@@ -280,7 +361,6 @@
             tctx.beginPath(); tctx.moveTo(pad.l, y); tctx.lineTo(w - pad.r, y); tctx.stroke();
         }
 
-        // axes labels
         tctx.fillStyle = '#555';
         tctx.font = '11px monospace';
         tctx.textAlign = 'right';
@@ -289,14 +369,12 @@
             tctx.fillText(val, pad.l - 5, pad.t + (ch / 4) * i + 4);
         }
         tctx.textAlign = 'center';
-        const timeSteps = 5;
-        for (let i = 0; i <= timeSteps; i++) {
-            const t = minT + ((maxT - minT) / timeSteps) * i;
-            const x = pad.l + (cw / timeSteps) * i;
+        for (let i = 0; i <= 5; i++) {
+            const t = minT + ((maxT - minT) / 5) * i;
+            const x = pad.l + (cw / 5) * i;
             tctx.fillText(Math.round(t) + 's', x, h - 5);
         }
 
-        // line + dots
         tctx.strokeStyle = '#e94560';
         tctx.lineWidth = 2;
         tctx.beginPath();
@@ -307,7 +385,6 @@
         }
         tctx.stroke();
 
-        // area fill
         tctx.lineTo(pad.l + cw, pad.t + ch);
         tctx.lineTo(pad.l, pad.t + ch);
         tctx.closePath();
@@ -317,7 +394,6 @@
         tctx.fillStyle = grad;
         tctx.fill();
 
-        // dots
         for (let i = 0; i < events.length; i++) {
             const x = pad.l + ((timestamps[i] - minT) / (maxT - minT || 1)) * cw;
             const y = pad.t + ch - (counts[i] / maxC) * ch;
@@ -335,21 +411,30 @@
     function addLog(msg, type) {
         const p = document.createElement('p');
         p.textContent = msg;
-        if (type === 'started') {
+        if (type === 'new') {
+            p.style.color = '#4ecca3';
+            p.style.fontWeight = 'bold';
+            p.style.borderLeft = '3px solid #4ecca3';
+            p.style.paddingLeft = '8px';
+        } else if (type === 'started') {
             p.style.color = '#f0a500';
             p.style.fontWeight = 'bold';
             p.style.borderLeft = '3px solid #f0a500';
+            p.style.paddingLeft = '8px';
+        } else if (type === 'routine') {
+            p.style.color = '#3a86ff';
+            p.style.fontWeight = 'bold';
+            p.style.borderLeft = '3px solid #3a86ff';
             p.style.paddingLeft = '8px';
         }
         logDiv.prepend(p);
         if (logDiv.children.length > 100) logDiv.lastChild.remove();
     }
 
-    // Toast notification for pattern start
-    function showToast(msg) {
+    function showToast(msg, color) {
         const toast = document.createElement('div');
         toast.textContent = msg;
-        toast.style.cssText = 'position:fixed;top:1rem;right:1rem;background:#f0a500;color:#0f0f1a;padding:12px 24px;border-radius:8px;font-weight:700;font-size:1.1rem;z-index:999;animation:fadeout 3s forwards';
+        toast.style.cssText = `position:fixed;top:1rem;right:1rem;background:${color || '#f0a500'};color:#0f0f1a;padding:12px 24px;border-radius:8px;font-weight:700;font-size:1.1rem;z-index:999;animation:fadeout 3s forwards`;
         document.body.appendChild(toast);
         setTimeout(() => toast.remove(), 3000);
     }
@@ -368,10 +453,29 @@
         };
         ws.onmessage = (e) => {
             const data = JSON.parse(e.data);
+
+            if (data.type === 'routine') {
+                state.routine = data;
+                addLog(`Routine detected: ${data.sequence.map(id => '#'+id).join(' → ')} — ${data.sets} sets`, 'routine');
+                showToast(`Routine: ${data.sequence.map(id => '#'+id).join(' → ')} — ${data.sets} sets`, '#3a86ff');
+                updateDashboard();
+                return;
+            }
+
+            // type === 'exercise' (or legacy without type)
             state.events.push(data);
+
             if (data.count === 0) {
-                addLog(`[${data.timestamp}s] >>> Exercise #${data.pattern_id} STARTED`, 'started');
-                showToast(`Exercise #${data.pattern_id} started!`);
+                const isNew = !state.knownPatterns.has(data.pattern_id);
+                state.knownPatterns.add(data.pattern_id);
+                if (isNew) {
+                    addLog(`[${data.timestamp}s] New exercise #${data.pattern_id} detected`, 'new');
+                    showToast(`New exercise #${data.pattern_id} detected`, '#4ecca3');
+                    fetchPatternInfo();
+                } else {
+                    addLog(`[${data.timestamp}s] Exercise #${data.pattern_id} resumed`, 'started');
+                    showToast(`Exercise #${data.pattern_id} resumed`);
+                }
             } else {
                 addLog(`[${data.timestamp}s] exercise #${data.pattern_id} rep ${data.count}`);
             }
@@ -394,9 +498,16 @@
     connectEvents();
     connectLandmarks();
 
-    // Load existing stats on page load
     fetch('/api/stats').then(r => r.json()).then(data => {
+        for (const p of data.patterns) {
+            state.patternInfo[p.id] = {
+                dominant_joints: p.dominant_joints,
+                body_parts: p.body_parts || [],
+            };
+            state.knownPatterns.add(p.id);
+        }
         state.events = data.events;
+        if (data.routine) state.routine = data.routine;
         updateDashboard();
     }).catch(() => {});
 

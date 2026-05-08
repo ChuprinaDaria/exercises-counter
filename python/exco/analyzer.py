@@ -73,9 +73,11 @@ class PatternAnalyzer:
                                 self._make_pattern(event)
                             ))
                             joints_json = json.dumps(list(event.dominant_joints))
-                            self._db.write_pattern(
+                            new_id = self._db.write_pattern(
                                 sig_bytes, event.period_frames, joints_json
                             )
+                            # Signal new pattern as event (count=0)
+                            self._db.write_event(new_id, 0, ts)
                         elif event.pattern_started:
                             # Known pattern resumed — write event with count=0
                             self._db.write_event(

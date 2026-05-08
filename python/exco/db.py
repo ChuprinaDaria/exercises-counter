@@ -105,6 +105,11 @@ class ExcoDB:
         )
         return [dict(row) for row in cur.fetchall()]
 
+    def max_frame_id(self) -> int:
+        cur = self._conn.execute("SELECT MAX(frame_id) FROM landmarks")
+        row = cur.fetchone()
+        return row[0] if row[0] is not None else -1
+
     def close(self) -> None:
         if hasattr(self._local, "conn"):
             self._local.conn.close()

@@ -13,7 +13,9 @@ AnalyzerCore::AnalyzerCore(AnalyzerConfig config)
     , frame_count_(0)
     , next_pattern_id_(1)
     , active_pattern_id_(-1)
-    , no_match_frames_(0) {}
+    , no_match_frames_(0)
+    , pending_pattern_id_(-1)
+    , pending_pattern_frames_(0) {}
 
 void AnalyzerCore::load_pattern(const Pattern& p) {
     matcher_.add_pattern(p);
@@ -135,9 +137,30 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
         : 0.5f;
 
     if (match.has_value()) {
-        no_match_frames_ = 0;
+        // Suppress pattern flipping: only switch active pattern after
+        // several consecutive matches of a different pattern
+        if (match->id != active_pattern_id_) {
+            if (match->id == pending_pattern_id_) {
+                ++pending_pattern_frames_;
+            } else {
+                pending_pattern_id_ = match->id;
+                pending_pattern_frames_ = 1;
+            }
+            if (pending_pattern_frames_ < config_.pattern_switch_frames) {
+                // Not enough evidence to switch — still push to counter
+                no_match_frames_ = 0;
+                auto it = counters_.find(match->id);
+                if (it != counters_.end()) {
+                    it->second.push(normalized);
+                }
+                return std::nullopt;
+            }
+        }
 
-        // Detect pattern (re)start: different from active, or resumed after pause
+        no_match_frames_ = 0;
+        pending_pattern_frames_ = 0;
+        pending_pattern_id_ = -1;
+
         bool started = (match->id != active_pattern_id_);
         active_pattern_id_ = match->id;
 
@@ -169,17 +192,20 @@ std::optional<AnalysisEvent> AnalyzerCore::push_frame(
             active_pattern_id_ = -1;  // pattern stopped
         }
 
-        Pattern new_p;
-        new_p.id = next_pattern_id_++;
-        new_p.period_frames = period;
-        new_p.signature = cycle;
-        new_p.dominant_joints = dominant;
-        matcher_.add_pattern(new_p);
-        counters_.emplace(new_p.id, RepCounter(config_.counter_down,
-                                                config_.counter_up,
-                                                config_.counter_min_frames));
-        active_pattern_id_ = new_p.id;
-        return AnalysisEvent{-1, 0, period, cycle, dominant, false};
+        // Only create new pattern after sustained non-matching (prevents fragmentation)
+        if (no_match_frames_ == config_.new_pattern_delay) {
+            Pattern new_p;
+            new_p.id = next_pattern_id_++;
+            new_p.period_frames = period;
+            new_p.signature = cycle;
+            new_p.dominant_joints = dominant;
+            matcher_.add_pattern(new_p);
+            counters_.emplace(new_p.id, RepCounter(config_.counter_down,
+                                                    config_.counter_up,
+                                                    config_.counter_min_frames));
+            active_pattern_id_ = new_p.id;
+            return AnalysisEvent{-1, 0, period, cycle, dominant, false};
+        }
     }
 
     return std::nullopt;

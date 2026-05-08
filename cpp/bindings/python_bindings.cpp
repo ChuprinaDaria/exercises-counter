@@ -81,7 +81,9 @@ PYBIND11_MODULE(_exco_cpp, m) {
         .def_readwrite("counter_up", &exco::AnalyzerConfig::counter_up)
         .def_readwrite("counter_min_frames", &exco::AnalyzerConfig::counter_min_frames)
         .def_readwrite("smooth_window", &exco::AnalyzerConfig::smooth_window)
-        .def_readwrite("num_joints", &exco::AnalyzerConfig::num_joints);
+        .def_readwrite("num_joints", &exco::AnalyzerConfig::num_joints)
+        .def_readwrite("new_pattern_delay", &exco::AnalyzerConfig::new_pattern_delay)
+        .def_readwrite("pattern_switch_frames", &exco::AnalyzerConfig::pattern_switch_frames);
 
     // analyzer core
     py::class_<exco::AnalyzerCore>(m, "AnalyzerCore")
