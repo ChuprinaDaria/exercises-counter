@@ -33,7 +33,7 @@ class LandmarkWriter:
         if not cap.isOpened():
             raise RuntimeError(f"Cannot open video source: {self._source}")
 
-        frame_id = 0
+        frame_id = self._db.max_frame_id() + 1
         start_time = time.monotonic()
 
         try:

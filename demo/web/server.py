@@ -28,7 +28,7 @@ _routine_detector = RoutineDetector()
 
 @app.get("/")
 async def index() -> HTMLResponse:
-    html = (STATIC_DIR / "index.html").read_text()
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
     return HTMLResponse(html)
 
 
@@ -79,7 +79,7 @@ async def api_stats() -> dict:
 async def ws_events(ws: WebSocket) -> None:
     await ws.accept()
     db = ExcoDB(DB_PATH)
-    last_id = 0
+    last_id = db.max_event_id()
     last_pattern = None
     try:
         while True:

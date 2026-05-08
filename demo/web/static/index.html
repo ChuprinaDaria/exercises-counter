@@ -139,6 +139,10 @@
         </div>
 
         <div class="dashboard">
+            <div id="summary-cards" class="cards">
+                <div class="card"><div class="name">All Reps</div><div class="reps" id="sum-reps">0</div></div>
+                <div class="card"><div class="name">Duration</div><div class="reps" id="sum-duration" style="font-size:1.6rem">0:00</div></div>
+            </div>
             <div id="exercise-cards" class="cards"></div>
 
             <div id="routine-banner" class="routine-banner">
@@ -308,6 +312,16 @@
                 state.routine.sequence.map(id => `#${id}`).join(' → ');
             document.getElementById('routine-sets').textContent =
                 `${state.routine.sets} sets`;
+        }
+
+        // Summary
+        const totalReps = patternIds.reduce((sum, pid) =>
+            sum + Math.max(0, ...events.filter(e => e.pattern_id === pid).map(e => e.count)), 0);
+        document.getElementById('sum-reps').textContent = totalReps;
+        if (events.length > 0) {
+            const dur = Math.round(events[events.length - 1].timestamp);
+            document.getElementById('sum-duration').textContent =
+                `${Math.floor(dur / 60)}:${String(dur % 60).padStart(2, '0')}`;
         }
 
         drawTimeline(events);

@@ -134,7 +134,7 @@ std::optional<Pattern> PatternMatcher::find_match(
 }
 
 void PatternMatcher::update_pattern(int id, const std::vector<float>& cycle,
-                                     const std::vector<int>& dominant_joints) {
+                                     const std::vector<int>& /* dominant_joints */) {
     for (auto& p : patterns_) {
         if (p.id != id) continue;
         // Running average of signature (blend 80% old + 20% new)
@@ -143,14 +143,7 @@ void PatternMatcher::update_pattern(int id, const std::vector<float>& cycle,
                 p.signature[i] = 0.8f * p.signature[i] + 0.2f * cycle[i];
             }
         }
-        // Merge dominant joints (add new ones not already present)
-        for (int j : dominant_joints) {
-            bool found = false;
-            for (int pj : p.dominant_joints) {
-                if (pj == j) { found = true; break; }
-            }
-            if (!found) p.dominant_joints.push_back(j);
-        }
+        // dominant_joints are fixed at creation — not expanded
         break;
     }
 }
