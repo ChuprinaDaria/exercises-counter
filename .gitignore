@@ -3,7 +3,11 @@ tests/fixtures/*.mp4
 
 # Build artifacts
 build/
+build_*/
 *.db
+*.db-shm
+*.db-wal
+*.pyd
 
 # MediaPipe model files
 *.task
