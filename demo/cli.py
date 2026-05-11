@@ -6,6 +6,7 @@ import sys
 import time
 
 from exco.db import ExcoDB
+from exco.body_parts import exercise_name
 from exco.writer import LandmarkWriter, find_camera
 from exco.analyzer import PatternAnalyzer
 from exco.pose.mediapipe_backend import MediaPipeBackend
@@ -24,17 +25,39 @@ def run_analyzer(db_path: str) -> None:
 
 def run_monitor(db_path: str) -> None:
     """Print events to stdout as they appear."""
+    import json
     db = ExcoDB(db_path)
     last_id = 0
+    pattern_names: dict[int, str] = {}
     try:
         while True:
+            # Load names for any new patterns (with disambiguation)
+            all_patterns = db.read_patterns()
+            new_ids = [p["id"] for p in all_patterns if p["id"] not in pattern_names]
+            if new_ids:
+                name_count: dict[str, int] = {}
+                ordered: list[tuple[int, str]] = []
+                for p in all_patterns:
+                    joints = json.loads(p["dominant_joints"])
+                    base = exercise_name(joints)
+                    name_count[base] = name_count.get(base, 0) + 1
+                    ordered.append((p["id"], base))
+                seen: dict[str, int] = {}
+                for pid, base in ordered:
+                    if name_count[base] > 1:
+                        seen[base] = seen.get(base, 0) + 1
+                        pattern_names[pid] = f"{base} #{seen[base]}"
+                    else:
+                        pattern_names[pid] = base
+
             events = db.read_events_since(last_id)
             for e in events:
-                print(
-                    f"[{e['timestamp']:.2f}s] "
-                    f"exercise #{e['pattern_id']}  "
-                    f"count: {e['count']}"
-                )
+                pid = e["pattern_id"]
+                name = pattern_names.get(pid, f"#{pid}")
+                if e["count"] == 0:
+                    print(f"[{e['timestamp']:.2f}s] {name} started")
+                else:
+                    print(f"[{e['timestamp']:.2f}s] {name} — rep {e['count']}")
                 last_id = e["id"]
             time.sleep(0.2)
     except KeyboardInterrupt:

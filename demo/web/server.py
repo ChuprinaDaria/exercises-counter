@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from exco.db import ExcoDB
-from exco.body_parts import joints_to_body_parts
+from exco.body_parts import joints_to_body_parts, exercise_name
 from exco.routine import RoutineDetector
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -53,15 +53,31 @@ async def api_stats() -> dict:
     global _routine_detector
     _routine_detector = routine_det
 
+    # Build pattern list with disambiguated names
+    pattern_list = []
+    name_count: dict[str, int] = {}
+    for p in patterns:
+        joints = json.loads(p["dominant_joints"])
+        base_name = exercise_name(joints)
+        name_count[base_name] = name_count.get(base_name, 0) + 1
+        pattern_list.append({
+            "id": p["id"],
+            "base_name": base_name,
+            "dominant_joints": joints,
+            "body_parts": joints_to_body_parts(joints),
+        })
+    # Add number suffix only when there are duplicates
+    seen: dict[str, int] = {}
+    for p in pattern_list:
+        base = p.pop("base_name")
+        if name_count[base] > 1:
+            seen[base] = seen.get(base, 0) + 1
+            p["name"] = f"{base} #{seen[base]}"
+        else:
+            p["name"] = base
+
     return {
-        "patterns": [
-            {
-                "id": p["id"],
-                "dominant_joints": json.loads(p["dominant_joints"]),
-                "body_parts": joints_to_body_parts(json.loads(p["dominant_joints"])),
-            }
-            for p in patterns
-        ],
+        "patterns": pattern_list,
         "events": [
             {"pattern_id": e["pattern_id"], "count": e["count"],
              "timestamp": round(e["timestamp"], 2)}

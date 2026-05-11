@@ -274,11 +274,12 @@
         for (const pid of patternIds) {
             const maxCount = Math.max(0, ...events.filter(e => e.pattern_id === pid).map(e => e.count));
             const info = state.patternInfo[pid];
+            const name = info ? (info.name || `#${pid}`) : `#${pid}`;
             const parts = info ? (info.body_parts || []) : [];
 
             const card = document.createElement('div');
             card.className = 'card';
-            card.innerHTML = `<div class="name">Exercise #${pid}</div>`
+            card.innerHTML = `<div class="name">${name}</div>`
                 + `<div class="reps">${maxCount}</div>`
                 + (parts.length ? `<div class="body-parts">${parts.join(', ')}</div>` : '');
             container.appendChild(card);
@@ -309,7 +310,10 @@
         if (state.routine) {
             banner.style.display = '';
             document.getElementById('routine-seq').textContent =
-                state.routine.sequence.map(id => `#${id}`).join(' → ');
+                state.routine.sequence.map(id => {
+                    const info = state.patternInfo[id];
+                    return info ? info.name : `#${id}`;
+                }).join(' → ');
             document.getElementById('routine-sets').textContent =
                 `${state.routine.sets} sets`;
         }
@@ -331,6 +335,7 @@
         fetch('/api/stats').then(r => r.json()).then(data => {
             for (const p of data.patterns) {
                 state.patternInfo[p.id] = {
+                    name: p.name,
                     dominant_joints: p.dominant_joints,
                     body_parts: p.body_parts || [],
                 };
@@ -470,8 +475,12 @@
 
             if (data.type === 'routine') {
                 state.routine = data;
-                addLog(`Routine detected: ${data.sequence.map(id => '#'+id).join(' → ')} — ${data.sets} sets`, 'routine');
-                showToast(`Routine: ${data.sequence.map(id => '#'+id).join(' → ')} — ${data.sets} sets`, '#3a86ff');
+                const seqNames = data.sequence.map(id => {
+                    const info = state.patternInfo[id];
+                    return info ? info.name : `#${id}`;
+                }).join(' → ');
+                addLog(`Routine detected: ${seqNames} — ${data.sets} sets`, 'routine');
+                showToast(`Routine: ${seqNames} — ${data.sets} sets`, '#3a86ff');
                 updateDashboard();
                 return;
             }
@@ -483,15 +492,19 @@
                 const isNew = !state.knownPatterns.has(data.pattern_id);
                 state.knownPatterns.add(data.pattern_id);
                 if (isNew) {
-                    addLog(`[${data.timestamp}s] New exercise #${data.pattern_id} detected`, 'new');
-                    showToast(`New exercise #${data.pattern_id} detected`, '#4ecca3');
+                    addLog(`[${data.timestamp}s] New exercise detected`, 'new');
+                    showToast(`New exercise detected`, '#4ecca3');
                     fetchPatternInfo();
                 } else {
-                    addLog(`[${data.timestamp}s] Exercise #${data.pattern_id} resumed`, 'started');
-                    showToast(`Exercise #${data.pattern_id} resumed`);
+                    const info = state.patternInfo[data.pattern_id];
+                    const name = info ? info.name : `#${data.pattern_id}`;
+                    addLog(`[${data.timestamp}s] ${name} resumed`, 'started');
+                    showToast(`${name} resumed`);
                 }
             } else {
-                addLog(`[${data.timestamp}s] exercise #${data.pattern_id} rep ${data.count}`);
+                const info = state.patternInfo[data.pattern_id];
+                const name = info ? info.name : `#${data.pattern_id}`;
+                addLog(`[${data.timestamp}s] ${name} — rep ${data.count}`);
             }
             updateDashboard();
         };
@@ -515,6 +528,7 @@
     fetch('/api/stats').then(r => r.json()).then(data => {
         for (const p of data.patterns) {
             state.patternInfo[p.id] = {
+                name: p.name,
                 dominant_joints: p.dominant_joints,
                 body_parts: p.body_parts || [],
             };
